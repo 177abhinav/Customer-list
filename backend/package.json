@@ -1,0 +1,19 @@
+{
+  "name": "customer-list-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Express proxy exposing the SAP API_BUSINESS_PARTNER OData v2 A_Customer entity set to the customer list frontend",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
