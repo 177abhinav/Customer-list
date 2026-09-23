@@ -1,0 +1,30 @@
+{
+  "xsappname": "customer-list-app",
+  "tenant-mode": "dedicated",
+  "description": "Customer List app — view access to SAP customer data",
+  "oauth2-configuration": {
+    "redirect-uris": [
+      "https://bb6ec32dtrial-dev-customer-list-approuter.cfapps.us10-001.hana.ondemand.com/**"
+    ]
+  },
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.Display",
+      "description": "View the customer list"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "Viewer",
+      "description": "Can view the customer list",
+      "scope-references": ["$XSAPPNAME.Display"]
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "CustomerListViewer",
+      "description": "View access to the Customer List app",
+      "role-template-references": ["$XSAPPNAME.Viewer"]
+    }
+  ]
+}

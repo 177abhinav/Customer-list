@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { buildFilter } from "./odataFilterBuilder.js";
+import { resolveSapConnection } from "./destinationService.js";
 
 class SapODataError extends Error {
   constructor(message, status, body) {
@@ -8,12 +9,6 @@ class SapODataError extends Error {
     this.status = status;
     this.body = body;
   }
-}
-
-function authHeader() {
-  if (!config.sap.username) return {};
-  const token = Buffer.from(`${config.sap.username}:${config.sap.password}`).toString("base64");
-  return { Authorization: `Basic ${token}` };
 }
 
 /**
@@ -41,13 +36,27 @@ const SELECT_FIELDS = [
 
 const EXPAND = "to_BusinessPartnerAddress/to_EmailAddress,to_BusinessPartnerAddress/to_PhoneNumber";
 
-function buildQuery({ filter, top, skip }) {
+// Whitelist of sortable fields -- only real top-level BP properties, since
+// $orderby (like $filter) can't reach into $expand'd nested data in V2.
+const SORT_FIELDS = {
+  name: "OrganizationBPName1",
+  customer: "Customer",
+};
+
+function buildOrderBy(sortBy, sortDir) {
+  const field = SORT_FIELDS[sortBy] ?? SORT_FIELDS.name;
+  const dir = sortDir === "desc" ? "desc" : "asc";
+  return `${field} ${dir}`;
+}
+
+function buildQuery({ filter, top, skip, sortBy, sortDir }) {
   const parts = [
     `$format=json`,
     `sap-client=${encodeURIComponent(config.sap.client)}`,
     `$select=${SELECT_FIELDS}`,
     `$expand=${encodeURIComponent(EXPAND)}`,
     `$filter=${encodeURIComponent(filter)}`,
+    `$orderby=${encodeURIComponent(buildOrderBy(sortBy, sortDir))}`,
     `$top=${top}`,
     `$skip=${skip}`,
     `$inlinecount=allpages`,
@@ -89,10 +98,18 @@ function flattenBusinessPartner(bp) {
  *
  * @returns {Promise<{ customers: object[], count: number|null }>}
  */
-export async function findCustomers({ search, top, skip }) {
+export async function findCustomers({ search, top, skip, sortBy, sortDir }) {
   const filter = buildFilter({ search });
-  const query = buildQuery({ filter, top, skip });
-  const url = `${config.sap.baseUrl}/A_BusinessPartner?${query}`;
+  const query = buildQuery({ filter, top, skip, sortBy, sortDir });
+
+  let baseUrl, headers;
+  try {
+    ({ baseUrl, headers } = await resolveSapConnection());
+  } catch (err) {
+    throw new SapODataError(`Could not resolve the SAP connection: ${err.message}`, 502, null);
+  }
+
+  const url = `${baseUrl}/A_BusinessPartner?${query}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.sap.requestTimeoutMs);
 
@@ -102,7 +119,7 @@ export async function findCustomers({ search, top, skip }) {
       method: "GET",
       headers: {
         Accept: "application/json",
-        ...authHeader(),
+        ...headers,
       },
       signal: controller.signal,
     });

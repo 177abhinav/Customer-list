@@ -1,0 +1,80 @@
+_schema-version: '3.3'
+ID: customer-list-app
+version: 1.0.0
+description: >
+  Customer List app -- App Router (single public entry point + login),
+  Express backend (SAP OData v2 proxy), XSUAA (authentication/scopes),
+  and a BTP Destination to S/4HANA. Frontend is a pre-built static bundle
+  served directly by App Router (copied into approuter/resources before
+  build -- see README).
+
+parameters:
+  enable-parallel-deployments: true
+
+modules:
+  # ---------------------------------------------------------------------
+  # Single public entry point. Serves the built React app (from
+  # approuter/resources/) and proxies /api/* to the backend module,
+  # enforcing XSUAA login + the "Display" scope on both.
+  # ---------------------------------------------------------------------
+  - name: customer-list-approuter
+    type: approuter.nodejs
+    path: approuter
+    requires:
+        - name: customer-list-srv-api
+          group: destinations
+          properties:
+              name: customer-list-srv-api
+              url: ~{srv-url}
+              forwardAuthToken: true
+        - name: customer-list-uaa
+    parameters:
+      disk-quota: 256M
+      memory: 256M
+    build-parameters:
+      ignore: ["node_modules/"]
+
+  # ---------------------------------------------------------------------
+  # The Express API. Only ever reached through App Router in normal
+  # operation -- "requires" the uaa and destination resources so their
+  # credentials land in this module's VCAP_SERVICES.
+  # ---------------------------------------------------------------------
+  - name: customer-list-srv
+    type: nodejs
+    path: backend
+    provides:
+      - name: customer-list-srv-api
+        properties:
+          # App Router's xs-app.json "destination": "customer-list-srv-api"
+          # resolves to this module's own generated route -- no manual
+          # `cf app` + copy-paste-the-URL step needed anymore.
+          srv-url: ${default-url}
+    requires:
+      - name: customer-list-uaa
+      - name: customer-list-destination
+    parameters:
+      disk-quota: 512M
+      memory: 256M
+    build-parameters:
+      ignore: ["node_modules/"]
+
+resources:
+  # XSUAA instance, configured from xs-security.json (scopes/roles).
+  - name: customer-list-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: customer-list-app-${space}
+        tenant-mode: dedicated
+
+  # Destination service instance -- lets the backend resolve the
+  # S4-CUSTOMER-API destination (still configured manually in the BTP
+  # cockpit; only the *service instance* is provisioned here).
+  - name: customer-list-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite

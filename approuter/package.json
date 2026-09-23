@@ -1,0 +1,12 @@
+{
+  "name": "customer-list-approuter",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Single public entry point: serves the built frontend and proxies /api to the backend, enforcing XSUAA login on both",
+  "dependencies": {
+    "@sap/approuter": "^16"
+  },
+  "scripts": {
+    "start": "node node_modules/@sap/approuter/approuter.js"
+  }
+}
